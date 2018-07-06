@@ -350,7 +350,6 @@ void StorageMergeTree::mutate(const MutationCommands & commands, const Context &
             }
         }
 
-
         if (!future_mutated_part.parts.empty())
         {
             auto new_part = merger_mutator.mutatePartToTemporaryPart(
@@ -370,6 +369,46 @@ void StorageMergeTree::mutate(const MutationCommands & commands, const Context &
     }
 
     LOG_TRACE(log, "Finished, mutated " << parts_mutated << " parts.");
+}
+
+
+std::vector<MergeTreeMutationStatus> StorageMergeTree::getMutationsStatus() const
+{
+    std::lock_guard lock(currently_merging_mutex);
+
+    std::vector<Int64> part_data_versions;
+    auto data_parts = data.getDataPartsVector();
+    part_data_versions.reserve(data_parts.size());
+    for (const auto & part : data_parts)
+        part_data_versions.push_back(part->info.getDataVersion());
+
+    std::vector<MergeTreeMutationStatus> result;
+    for (const auto & kv : current_mutations_by_version)
+    {
+        Int64 mutation_version = kv.first;
+        const MergeTreeMutationEntry & entry = kv.second;
+
+        auto versions_it = std::lower_bound(
+            part_data_versions.begin(), part_data_versions.end(), mutation_version);
+        Int64 parts_to_do = versions_it - part_data_versions.begin();
+
+        for (const MutationCommand & command : entry.commands)
+        {
+            std::stringstream ss;
+            formatAST(*command.ast, ss, false, true);
+            result.push_back(MergeTreeMutationStatus
+            {
+                entry.id,
+                ss.str(),
+                entry.create_time,
+                entry.block_numbers,
+                parts_to_do,
+                (parts_to_do == 0),
+            });
+        }
+    }
+
+    return result;
 }
 
 
