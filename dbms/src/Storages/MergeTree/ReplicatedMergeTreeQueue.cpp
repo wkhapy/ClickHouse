@@ -499,7 +499,7 @@ void ReplicatedMergeTreeQueue::pullLogsToQueue(zkutil::ZooKeeperPtr zookeeper, z
 
 
 static size_t countPartsToMutate(
-    const ReplicatedMergeTreeMutationEntry & mutation, const ActiveDataPartSet & parts)
+    const MergeTreeMutationEntry & mutation, const ActiveDataPartSet & parts)
 {
     size_t count = 0;
     for (const auto & pair : mutation.block_numbers)
@@ -537,10 +537,10 @@ void ReplicatedMergeTreeQueue::updateMutations(zkutil::ZooKeeperPtr zookeeper, z
 
         for (auto it = mutations_by_znode.begin(); it != mutations_by_znode.end(); )
         {
-            const ReplicatedMergeTreeMutationEntry & entry = *it->second.entry;
-            if (!entries_in_zk_set.count(entry.znode_name))
+            const MergeTreeMutationEntry & entry = *it->second.entry;
+            if (!entries_in_zk_set.count(entry.id))
             {
-                LOG_DEBUG(log, "Removing obsolete mutation " + entry.znode_name + " from local state.");
+                LOG_DEBUG(log, "Removing obsolete mutation " + entry.id + " from local state.");
                 for (const auto & partition_and_block_num : entry.block_numbers)
                 {
                     auto & in_partition = mutations_by_partition[partition_and_block_num.first];
@@ -571,20 +571,20 @@ void ReplicatedMergeTreeQueue::updateMutations(zkutil::ZooKeeperPtr zookeeper, z
         for (const String & entry : entries_to_load)
             futures.emplace_back(zookeeper->asyncGet(zookeeper_path + "/mutations/" + entry));
 
-        std::vector<ReplicatedMergeTreeMutationEntryPtr> new_mutations;
+        std::vector<MergeTreeMutationEntryPtr> new_mutations;
         for (size_t i = 0; i < entries_to_load.size(); ++i)
         {
-            new_mutations.push_back(std::make_shared<ReplicatedMergeTreeMutationEntry>(
-                ReplicatedMergeTreeMutationEntry::parse(futures[i].get().data, entries_to_load[i])));
+            new_mutations.push_back(std::make_shared<MergeTreeMutationEntry>(
+                MergeTreeMutationEntry::parse(futures[i].get().data, entries_to_load[i])));
         }
 
         bool some_mutations_are_probably_done = false;
         {
             std::lock_guard lock(state_mutex);
 
-            for (const ReplicatedMergeTreeMutationEntryPtr & entry : new_mutations)
+            for (const MergeTreeMutationEntryPtr & entry : new_mutations)
             {
-                auto & mutation = mutations_by_znode.emplace(entry->znode_name, MutationStatus{entry, 0, false})
+                auto & mutation = mutations_by_znode.emplace(entry->id, MutationStatus{entry, 0, false})
                     .first->second;
 
                 for (const auto & pair : entry->block_numbers)
@@ -1081,7 +1081,7 @@ MutationCommands ReplicatedMergeTreeQueue::getMutationCommands(
 
 bool ReplicatedMergeTreeQueue::tryFinalizeMutations(zkutil::ZooKeeperPtr zookeeper)
 {
-    std::vector<ReplicatedMergeTreeMutationEntryPtr> candidates;
+    std::vector<MergeTreeMutationEntryPtr> candidates;
     {
         std::lock_guard lock(state_mutex);
 
@@ -1100,7 +1100,7 @@ bool ReplicatedMergeTreeQueue::tryFinalizeMutations(zkutil::ZooKeeperPtr zookeep
             }
             else if (mutation.parts_to_do == 0)
             {
-                LOG_TRACE(log, "Will check if mutation " << mutation.entry->znode_name << " is done");
+                LOG_TRACE(log, "Will check if mutation " << mutation.entry->id << " is done");
                 candidates.push_back(mutation.entry);
             }
         }
@@ -1111,25 +1111,25 @@ bool ReplicatedMergeTreeQueue::tryFinalizeMutations(zkutil::ZooKeeperPtr zookeep
 
     auto merge_pred = getMergePredicate(zookeeper);
 
-    std::vector<const ReplicatedMergeTreeMutationEntry *> finished;
-    for (const ReplicatedMergeTreeMutationEntryPtr & candidate : candidates)
+    std::vector<const MergeTreeMutationEntry *> finished;
+    for (const MergeTreeMutationEntryPtr & candidate : candidates)
     {
         if (merge_pred.isMutationFinished(*candidate))
             finished.push_back(candidate.get());
     }
 
     if (!finished.empty())
-        zookeeper->set(replica_path + "/mutation_pointer", finished.back()->znode_name);
+        zookeeper->set(replica_path + "/mutation_pointer", finished.back()->id);
 
     {
         std::lock_guard lock(state_mutex);
 
-        for (const ReplicatedMergeTreeMutationEntry * entry : finished)
+        for (const MergeTreeMutationEntry * entry : finished)
         {
-            auto it = mutations_by_znode.find(entry->znode_name);
+            auto it = mutations_by_znode.find(entry->id);
             if (it != mutations_by_znode.end())
             {
-                LOG_TRACE(log, "Mutation " << entry->znode_name << " is done");
+                LOG_TRACE(log, "Mutation " << entry->id << " is done");
                 it->second.is_done = true;
             }
         }
@@ -1234,7 +1234,7 @@ std::vector<MergeTreeMutationStatus> ReplicatedMergeTreeQueue::getMutationsStatu
     for (const auto & pair : mutations_by_znode)
     {
         const MutationStatus & status = pair.second;
-        const ReplicatedMergeTreeMutationEntry & entry = *status.entry;
+        const MergeTreeMutationEntry & entry = *status.entry;
 
         for (const MutationCommand & command : entry.commands)
         {
@@ -1242,7 +1242,7 @@ std::vector<MergeTreeMutationStatus> ReplicatedMergeTreeQueue::getMutationsStatu
             formatAST(*command.ast, ss, false, true);
             result.push_back(MergeTreeMutationStatus
             {
-                entry.znode_name,
+                entry.id,
                 ss.str(),
                 entry.create_time,
                 entry.block_numbers,
@@ -1528,7 +1528,7 @@ std::optional<Int64> ReplicatedMergeTreeMergePredicate::getDesiredMutationVersio
 }
 
 
-bool ReplicatedMergeTreeMergePredicate::isMutationFinished(const ReplicatedMergeTreeMutationEntry & mutation) const
+bool ReplicatedMergeTreeMergePredicate::isMutationFinished(const MergeTreeMutationEntry & mutation) const
 {
     for (const auto & kv : mutation.block_numbers)
     {
@@ -1542,7 +1542,7 @@ bool ReplicatedMergeTreeMergePredicate::isMutationFinished(const ReplicatedMerge
                 partition_it->second.begin(), partition_it->second.lower_bound(block_num));
             if (blocks_count)
             {
-                LOG_TRACE(queue.log, "Mutation " << mutation.znode_name << " is not done yet because "
+                LOG_TRACE(queue.log, "Mutation " << mutation.id << " is not done yet because "
                     << "in partition ID " << partition_id  << " there are still "
                     << blocks_count << " uncommitted blocks.");
                 return false;
@@ -1556,7 +1556,7 @@ bool ReplicatedMergeTreeMergePredicate::isMutationFinished(const ReplicatedMerge
         size_t suddenly_appeared_parts = countPartsToMutate(mutation, queue.virtual_parts);
         if (suddenly_appeared_parts)
         {
-            LOG_TRACE(queue.log, "Mutation " << mutation.znode_name << " is not done yet because "
+            LOG_TRACE(queue.log, "Mutation " << mutation.id << " is not done yet because "
                 << suddenly_appeared_parts << " parts to mutate suddenly appeared.");
             return false;
         }

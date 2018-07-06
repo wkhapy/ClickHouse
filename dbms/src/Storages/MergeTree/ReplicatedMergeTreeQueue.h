@@ -4,7 +4,7 @@
 
 #include <Common/ActionBlocker.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeLogEntry.h>
-#include <Storages/MergeTree/ReplicatedMergeTreeMutationEntry.h>
+#include <Storages/MergeTree/MergeTreeMutationEntry.h>
 #include <Storages/MergeTree/ActiveDataPartSet.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
@@ -96,7 +96,7 @@ private:
 
     struct MutationStatus
     {
-        ReplicatedMergeTreeMutationEntryPtr entry;
+        MergeTreeMutationEntryPtr entry;
 
         /// A number of parts that should be mutated/merged or otherwise moved to Obsolete state for this mutation to complete.
         Int64 parts_to_do = 0;
@@ -355,7 +355,7 @@ public:
     /// Returned mutation version number is always the biggest possible.
     std::optional<Int64> getDesiredMutationVersion(const MergeTreeData::DataPartPtr & part) const;
 
-    bool isMutationFinished(const ReplicatedMergeTreeMutationEntry & mutation) const;
+    bool isMutationFinished(const MergeTreeMutationEntry & mutation) const;
 
 private:
     const ReplicatedMergeTreeQueue & queue;

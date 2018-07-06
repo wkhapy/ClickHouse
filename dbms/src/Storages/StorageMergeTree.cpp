@@ -293,9 +293,14 @@ void StorageMergeTree::mutate(const MutationCommands & commands, const Context &
         std::lock_guard lock(currently_merging_mutex);
 
         version = increment.get();
-        mutation_it = current_mutations_by_version.emplace(std::piecewise_construct,
-            std::forward_as_tuple(version),
-            std::forward_as_tuple(commands));
+
+        MergeTreeMutationEntry entry;
+        entry.id = toString(version);
+        entry.create_time = time(nullptr);
+        entry.block_numbers.emplace("", version);
+        entry.commands = commands;
+
+        mutation_it = current_mutations_by_version.emplace(version, std::move(entry));
     }
 
     size_t parts_mutated = 0;
@@ -348,7 +353,8 @@ void StorageMergeTree::mutate(const MutationCommands & commands, const Context &
 
         if (!future_mutated_part.parts.empty())
         {
-            auto new_part = merger_mutator.mutatePartToTemporaryPart(future_mutated_part, commands, context);
+            auto new_part = merger_mutator.mutatePartToTemporaryPart(
+                future_mutated_part, mutation_it->second.commands, context);
             data.renameTempPartAndReplace(new_part);
             ++parts_mutated;
         }

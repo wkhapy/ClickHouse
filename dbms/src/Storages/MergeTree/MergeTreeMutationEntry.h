@@ -12,23 +12,26 @@ namespace DB
 class ReadBuffer;
 class WriteBuffer;
 
-struct ReplicatedMergeTreeMutationEntry
+struct MergeTreeMutationEntry
 {
     void writeText(WriteBuffer & out) const;
     void readText(ReadBuffer & in);
 
     String toString() const;
-    static ReplicatedMergeTreeMutationEntry parse(const String & str, String znode_name);
+    static MergeTreeMutationEntry parse(const String & str, String id);
 
-    String znode_name;
+    /// For Replicated tables id is a znode name in ZooKeeper.
+    String id;
 
     time_t create_time = 0;
+    /// Empty for non-replicated tables.
     String source_replica;
 
+    /// For non-replicated tables the map is single entry "" -> block_number.
     std::map<String, Int64> block_numbers;
     MutationCommands commands;
 };
 
-using ReplicatedMergeTreeMutationEntryPtr = std::shared_ptr<const ReplicatedMergeTreeMutationEntry>;
+using MergeTreeMutationEntryPtr = std::shared_ptr<const MergeTreeMutationEntry>;
 
 }

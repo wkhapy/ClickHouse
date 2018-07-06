@@ -7,6 +7,7 @@
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/MergeTreeDataMergerMutator.h>
+#include <Storages/MergeTree/MergeTreeMutationEntry.h>
 #include <Storages/MergeTree/DiskSpaceMonitor.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Common/SimpleIncrement.h>
@@ -110,7 +111,7 @@ private:
 
     std::mutex currently_merging_mutex;
     MergeTreeData::DataParts currently_merging;
-    std::multimap<Int64, const MutationCommands &> current_mutations_by_version;
+    std::multimap<Int64, MergeTreeMutationEntry> current_mutations_by_version;
 
     Logger * log;
 

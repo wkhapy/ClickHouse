@@ -1,4 +1,4 @@
-#include <Storages/MergeTree/ReplicatedMergeTreeMutationEntry.h>
+#include <Storages/MergeTree/MergeTreeMutationEntry.h>
 #include <Parsers/ParserAlterQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/formatAST.h>
@@ -16,7 +16,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_MUTATION_COMMAND;
 }
 
-void ReplicatedMergeTreeMutationEntry::writeText(WriteBuffer & out) const
+void MergeTreeMutationEntry::writeText(WriteBuffer & out) const
 {
     out << "format version: 1\n"
         << "create time: " << LocalDateTime(create_time ? create_time : time(nullptr)) << "\n"
@@ -35,7 +35,7 @@ void ReplicatedMergeTreeMutationEntry::writeText(WriteBuffer & out) const
     out << "commands: " << escape << commands_ss.str();
 }
 
-void ReplicatedMergeTreeMutationEntry::readText(ReadBuffer & in)
+void MergeTreeMutationEntry::readText(ReadBuffer & in)
 {
     in >> "format version: 1\n";
 
@@ -71,17 +71,17 @@ void ReplicatedMergeTreeMutationEntry::readText(ReadBuffer & in)
 
 }
 
-String ReplicatedMergeTreeMutationEntry::toString() const
+String MergeTreeMutationEntry::toString() const
 {
     WriteBufferFromOwnString out;
     writeText(out);
     return out.str();
 }
 
-ReplicatedMergeTreeMutationEntry ReplicatedMergeTreeMutationEntry::parse(const String & str, String znode_name)
+MergeTreeMutationEntry MergeTreeMutationEntry::parse(const String & str, String id)
 {
-    ReplicatedMergeTreeMutationEntry res;
-    res.znode_name = std::move(znode_name);
+    MergeTreeMutationEntry res;
+    res.id = std::move(id);
 
     ReadBufferFromString in(str);
     res.readText(in);

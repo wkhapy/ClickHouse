@@ -8,7 +8,7 @@
 #include <Storages/MergeTree/MergeTreeDataPart.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeBlockOutputStream.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeQuorumEntry.h>
-#include <Storages/MergeTree/ReplicatedMergeTreeMutationEntry.h>
+#include <Storages/MergeTree/MergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeAddress.h>
 
@@ -4032,7 +4032,7 @@ void StorageReplicatedMergeTree::mutate(const MutationCommands & commands, const
     /// the version of this mutation), the mutation is considered done and can be deleted.
     /// TODO: add a way to track the progress of mutations and a process to clean old mutations.
 
-    ReplicatedMergeTreeMutationEntry entry;
+    MergeTreeMutationEntry entry;
     entry.source_replica = replica_name;
     entry.commands = commands;
 
@@ -4068,8 +4068,8 @@ void StorageReplicatedMergeTree::mutate(const MutationCommands & commands, const
         {
             const String & path_created =
                 static_cast<const zkutil::CreateResponse *>(responses[1].get())->path_created;
-            entry.znode_name = path_created.substr(path_created.find_last_of('/') + 1);
-            LOG_TRACE(log, "Created mutation with id " << entry.znode_name);
+            entry.id = path_created.substr(path_created.find_last_of('/') + 1);
+            LOG_TRACE(log, "Created mutation with ID " << entry.id);
             break;
         }
         else if (rc == ZooKeeperImpl::ZooKeeper::ZBADVERSION)
